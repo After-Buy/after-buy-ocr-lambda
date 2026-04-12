@@ -33,7 +33,12 @@ jobs:
           mkdir -p package
           cp lambda_function.py package/
           cp -r parsers package/
-          pip install --target package -r requirements.txt
+          pip install \
+            --target package \
+            --platform manylinux2014_x86_64 \
+            --python-version 3.12 \
+            --only-binary=:all: \
+            -r requirements.txt
           cd package
           zip -r ../deployment.zip .
           cd ..
