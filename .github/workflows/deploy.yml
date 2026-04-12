@@ -47,6 +47,10 @@ jobs:
             --query 'FunctionName' \
             --output text
 
+          echo "코드 업데이트 완료 대기 중..."
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }}
+
           aws lambda update-function-configuration \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --environment "{
@@ -65,6 +69,10 @@ jobs:
             --zip-file fileb://deployment.zip \
             --query 'FunctionName' \
             --output text
+
+          echo "코드 업데이트 완료 대기 중..."
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }}
 
           aws lambda update-function-configuration \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
