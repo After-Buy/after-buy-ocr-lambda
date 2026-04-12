@@ -54,14 +54,14 @@ PROMPT_BY_TYPE = {
         "예: Apple 스타일 MTQN3KH/A, Samsung 스타일 SM-G998N, LG 스타일 LM-V600N\n\n"
         "텍스트:\n{text_lines}\n\n"
         "반드시 아래 JSON 형식으로만 응답하세요:\n"
-        '{"model_name": "..."}'
+        '{{"model_name": "..."}}'
     ),
     "SERIAL": (
         "다음 OCR 텍스트에서 기기 시리얼 넘버를 추출하세요.\n"
         "시리얼 넘버는 보통 'Serial', 'S/N', '시리얼', '일련번호' 근처에 있는 8~20자리 영숫자입니다.\n\n"
         "텍스트:\n{text_lines}\n\n"
         "반드시 아래 JSON 형식으로만 응답하세요:\n"
-        '{"serial_number": "..."}'
+        '{{"serial_number": "..."}}'
     ),
     "RECEIPT": (
         "다음 영수증 OCR 텍스트에서 구매 정보를 추출하세요.\n"
@@ -71,7 +71,7 @@ PROMPT_BY_TYPE = {
         "- purchase_store: 구매 매장명 (예: 'Apple Store 강남', '삼성디지털프라자').\n\n"
         "텍스트:\n{text_lines}\n\n"
         "반드시 아래 JSON 형식으로만 응답하세요:\n"
-        '{"purchase_date": "YYYY-MM-DD", "purchase_price": 0, "purchase_store": "..."}'
+        '{{"purchase_date": "YYYY-MM-DD", "purchase_price": 0, "purchase_store": "..."}}'
     ),
 }
 
