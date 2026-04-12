@@ -87,11 +87,11 @@ def extract_with_gemini(ocr_type, lines):
     )
 
     payload = {
-        "system_instruction": {
+        "systemInstruction": {
             "parts": [{"text": SYSTEM_INSTRUCTION}]
         },
         "contents": [
-            {"parts": [{"text": prompt}]}
+            {"role": "user", "parts": [{"text": prompt}]}
         ],
         "generationConfig": {
             "responseMimeType": "application/json",
