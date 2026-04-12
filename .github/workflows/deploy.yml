@@ -34,10 +34,11 @@ jobs:
           cp lambda_function.py package/
           cp -r parsers package/
           docker run --rm \
+            --entrypoint /bin/sh \
             -v "$PWD/package:/package" \
             -v "$PWD/requirements.txt:/requirements.txt" \
             public.ecr.aws/lambda/python:3.12 \
-            /bin/sh -c "pip install --target /package -r /requirements.txt"
+            -c "pip install --target /package -r /requirements.txt"
           cd package
           zip -r ../deployment.zip .
           cd ..
