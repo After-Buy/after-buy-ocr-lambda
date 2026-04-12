@@ -44,7 +44,6 @@ jobs:
           aws lambda update-function-code \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --zip-file fileb://deployment.zip \
-            --description "dev-${{ github.sha }}" \
             --query 'FunctionName' \
             --output text
 
@@ -64,7 +63,6 @@ jobs:
           aws lambda update-function-code \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --zip-file fileb://deployment.zip \
-            --description "prod-${{ github.sha }}" \
             --query 'FunctionName' \
             --output text
 
