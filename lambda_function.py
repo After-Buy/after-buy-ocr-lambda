@@ -33,8 +33,7 @@ VALID_OCR_TYPES = {"MODEL", "SERIAL", "RECEIPT"}
 INTERNAL_SECRET_KEY = os.environ.get("INTERNAL_SECRET_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
-GEMINI_MODEL = "gemini-2.5-flash-lite"
-GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+GEMINI_API_URL = "https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-2.5-flash-lite:generateContent"
 
 SYSTEM_INSTRUCTION = (
     "당신은 OCR 텍스트 정제 어시스턴트입니다. "
