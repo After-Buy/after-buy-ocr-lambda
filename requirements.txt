@@ -1,2 +1,3 @@
 # AWS Lambda Python 런타임에 boto3가 기본 포함되어 있어 별도 설치 불필요
 # 추가 의존성이 필요한 경우에만 여기에 추가
+google-genai
