@@ -3,13 +3,11 @@ import json
 import logging
 import os
 import re
+import urllib.request
+import urllib.error
 
 import boto3
 from botocore.exceptions import ClientError
-
-from google import genai
-from google.genai import errors as genai_errors
-from google.genai import types
 
 from parsers.receipt_parser import parse_receipt
 from parsers.model_parser import parse_model
@@ -36,6 +34,7 @@ INTERNAL_SECRET_KEY = os.environ.get("INTERNAL_SECRET_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 
 GEMINI_MODEL = "gemini-2.5-flash-lite"
+GEMINI_API_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 SYSTEM_INSTRUCTION = (
     "당신은 OCR 텍스트 정제 어시스턴트입니다. "
@@ -54,12 +53,16 @@ PROMPT_BY_TYPE = {
         "다음 OCR 텍스트에서 기기 모델명을 추출하세요.\n"
         "모델명은 보통 'Model', '모델', '모델명' 근처에 있는 영숫자 코드입니다.\n"
         "예: Apple 스타일 MTQN3KH/A, Samsung 스타일 SM-G998N, LG 스타일 LM-V600N\n\n"
-        "텍스트:\n{text_lines}"
+        "텍스트:\n{text_lines}\n\n"
+        "반드시 아래 JSON 형식으로만 응답하세요:\n"
+        '{"model_name": "..."}'
     ),
     "SERIAL": (
         "다음 OCR 텍스트에서 기기 시리얼 넘버를 추출하세요.\n"
         "시리얼 넘버는 보통 'Serial', 'S/N', '시리얼', '일련번호' 근처에 있는 8~20자리 영숫자입니다.\n\n"
-        "텍스트:\n{text_lines}"
+        "텍스트:\n{text_lines}\n\n"
+        "반드시 아래 JSON 형식으로만 응답하세요:\n"
+        '{"serial_number": "..."}'
     ),
     "RECEIPT": (
         "다음 영수증 OCR 텍스트에서 구매 정보를 추출하세요.\n"
@@ -67,58 +70,70 @@ PROMPT_BY_TYPE = {
         "- purchase_price: 결제 금액 (콤마, 통화기호 없는 정수). 보통 '합계', '총', 'TOTAL', '결제금액' 근처의 가장 큰 금액.\n"
         "  단, 배송비, 적립금, 포인트, 할인, 쿠폰, 부가세는 제외.\n"
         "- purchase_store: 구매 매장명 (예: 'Apple Store 강남', '삼성디지털프라자').\n\n"
-        "텍스트:\n{text_lines}"
+        "텍스트:\n{text_lines}\n\n"
+        "반드시 아래 JSON 형식으로만 응답하세요:\n"
+        '{"purchase_date": "YYYY-MM-DD", "purchase_price": 0, "purchase_store": "..."}'
     ),
-}
-
-SCHEMA_BY_TYPE = {
-    "MODEL": {
-        "type": "OBJECT",
-        "properties": {
-            "model_name": {"type": "STRING", "description": "기기 모델명"},
-        },
-        "required": ["model_name"],
-    },
-    "SERIAL": {
-        "type": "OBJECT",
-        "properties": {
-            "serial_number": {"type": "STRING", "description": "기기 시리얼 넘버"},
-        },
-        "required": ["serial_number"],
-    },
-    "RECEIPT": {
-        "type": "OBJECT",
-        "properties": {
-            "purchase_date": {"type": "STRING", "description": "구매일자 (YYYY-MM-DD)"},
-            "purchase_price": {"type": "INTEGER", "description": "결제 금액 (정수)"},
-            "purchase_store": {"type": "STRING", "description": "구매 매장명"},
-        },
-    },
 }
 
 
 def extract_with_gemini(ocr_type, lines):
-    """Gemini API를 사용해 Textract 텍스트를 정제된 구조화 데이터로 변환."""
+    """Gemini REST API를 직접 호출하여 Textract 텍스트를 정제."""
     if not GEMINI_API_KEY:
         logger.info("GEMINI_API_KEY 미설정, Gemini 스킵")
         return None
 
-    client = genai.Client(api_key=GEMINI_API_KEY)
-
-    prompt = PROMPT_BY_TYPE[ocr_type].format(text_lines=json.dumps(lines, ensure_ascii=False))
-    schema = SCHEMA_BY_TYPE[ocr_type]
-
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
-            response_mime_type="application/json",
-            response_json_schema=schema,
-        ),
+    prompt = PROMPT_BY_TYPE[ocr_type].format(
+        text_lines=json.dumps(lines, ensure_ascii=False)
     )
 
-    result = json.loads(response.text)
+    payload = {
+        "system_instruction": {
+            "parts": [{"text": SYSTEM_INSTRUCTION}]
+        },
+        "contents": [
+            {"parts": [{"text": prompt}]}
+        ],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+        },
+    }
+
+    url = f"{GEMINI_API_URL}?key={GEMINI_API_KEY}"
+    data = json.dumps(payload).encode("utf-8")
+
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            resp_body = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        logger.warning("Gemini API HTTP %s: %s", e.code, body[:300])
+        return None
+    except urllib.error.URLError as e:
+        logger.warning("Gemini API 연결 실패: %s", e.reason)
+        return None
+
+    # 응답에서 텍스트 추출
+    try:
+        text = resp_body["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError):
+        logger.warning("Gemini 응답 구조 이상: %s", json.dumps(resp_body, ensure_ascii=False)[:300])
+        return None
+
+    # JSON 파싱
+    try:
+        result = json.loads(text)
+    except json.JSONDecodeError:
+        logger.warning("Gemini 응답 JSON 아님: %s", text[:200])
+        return None
+
     logger.info("Gemini 응답: %s", result)
 
     validated = validate_gemini_result(ocr_type, result)
@@ -169,14 +184,6 @@ def validate_gemini_result(ocr_type, result):
 def lambda_handler(event, context):
     """
     Lambda Function URL을 통해 Device Service에서 HTTP POST로 요청 수신.
-
-    Function URL 이벤트 형식:
-        event = {
-            "version": "2.0",
-            "headers": {"x-internal-secret-key": "...", "content-type": "application/json", ...},
-            "body": '{"ocr_type": "RECEIPT", "image_base64": "..."}',
-            ...
-        }
     """
     # 1. 내부 통신 인증
     headers = event.get("headers", {})
@@ -234,10 +241,6 @@ def lambda_handler(event, context):
     result = None
     try:
         result = extract_with_gemini(ocr_type, lines)
-    except genai_errors.APIError as e:
-        logger.warning("Gemini API 오류 (code=%s), regex 폴백: %s", e.code, e.message)
-    except json.JSONDecodeError as e:
-        logger.warning("Gemini 응답 JSON 파싱 실패, regex 폴백: %s", e)
     except Exception as e:
         logger.warning("Gemini 파싱 실패, regex 폴백: %s", e)
 
