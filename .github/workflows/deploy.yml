@@ -1,0 +1,84 @@
+name: Deploy OCR Lambda
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  LAMBDA_FUNCTION_NAME: ${{ secrets.LAMBDA_FUNCTION_NAME }}
+
+jobs:
+  deploy:
+    name: Deploy to AWS Lambda
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.LAMBDA_DEPLOY_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.LAMBDA_DEPLOY_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Create deployment package
+        run: |
+          mkdir -p package
+          cp lambda_function.py package/
+          cp -r parsers package/
+          cd package
+          zip -r ../deployment.zip .
+          cd ..
+
+      - name: Deploy to Lambda (dev)
+        if: github.ref == 'refs/heads/develop'
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --zip-file fileb://deployment.zip \
+            --query 'FunctionName' \
+            --output text
+
+          echo "코드 업데이트 완료 대기 중..."
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }}
+
+          aws lambda update-function-configuration \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --environment "{
+              \"Variables\": {
+                \"INTERNAL_SECRET_KEY\": \"${{ secrets.INTERNAL_SECRET_KEY }}\",
+                \"GEMINI_API_KEY\": \"${{ secrets.GEMINI_API_KEY }}\"
+              }
+            }"
+          echo "Dev 배포 완료"
+
+      - name: Deploy to Lambda (prod)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --zip-file fileb://deployment.zip \
+            --query 'FunctionName' \
+            --output text
+
+          echo "코드 업데이트 완료 대기 중..."
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }}
+
+          aws lambda update-function-configuration \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --environment "{
+              \"Variables\": {
+                \"INTERNAL_SECRET_KEY\": \"${{ secrets.INTERNAL_SECRET_KEY }}\",
+                \"GEMINI_API_KEY\": \"${{ secrets.GEMINI_API_KEY }}\"
+              }
+            }"
+          echo "Prod 배포 완료"
